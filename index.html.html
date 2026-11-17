@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f1e7">
+  <title>Morning Routine</title>
+  <style>
+    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #192c24; background: #f5f1e7; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { width: min(100%, 500px); margin: auto; padding: 34px 20px 24px; }
+    header { padding: 22px 22px 24px; border-radius: 24px; color: #f9f7ec; background: #203e32; }
+    .week { margin: 0 0 10px; color: #dbeac9; font-size: .85rem; letter-spacing: .04em; }
+    h1 { margin: 0 0 9px; font: 400 clamp(2rem, 8.5vw, 2.85rem)/1.04 Georgia, serif; letter-spacing: -.035em; }
+    .cue { margin: 0; color: #e2ecdf; font-size: .95rem; line-height: 1.45; }
+    .habit { margin-top: 12px; padding: 16px; background: #fffdf7; border: 1px solid #dfded2; border-radius: 20px; }
+    .habit-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    h2 { margin: 0; font: 400 1.55rem/1.1 Georgia, serif; }
+    .dots { display: flex; gap: 5px; }
+    .dots span { width: 13px; height: 13px; border: 1px solid #829284; border-radius: 50%; background: #eaf0e6; }
+    .dots .complete { border-color: #32664b; background: #32664b; }
+    .left { margin: 5px 0 12px; color: #495b50; font-size: .9rem; }
+    button { display: block; width: 100%; min-height: 48px; padding: 10px; border: 1px solid transparent; border-radius: 12px; background: #28583e; color: #fff; line-height: 1.25; font-family: inherit; font-size: 1rem; font-weight: 650; touch-action: manipulation; cursor: pointer; }
+    button:focus-visible { outline: 3px solid #947348; outline-offset: 3px; }
+    button:disabled { background: #e5efe4; color: #294c36; cursor: default; opacity: 1; -webkit-text-fill-color: #294c36; }
+    .notice { background: #fff1d7; border-radius: 12px; padding: 12px; font-size: .9rem; line-height: 1.4; }
+    @media (min-width: 500px) { main { padding-top: 56px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <p class="week" id="week">Weekly goal · 3 of each</p>
+      <h1>Morning routine</h1>
+      <p class="cue">After you turn off your alarm, walk first. Read when you get back.</p>
+    </header>
+    <p class="notice" id="notice" role="status" hidden></p>
+    <noscript><p class="notice">Open the dashboard in a browser with JavaScript enabled to log sessions.</p></noscript>
+    <section class="habit" aria-labelledby="walk-title">
+      <div class="habit-heading">
+        <h2 id="walk-title">Walk</h2>
+        <div class="dots" id="walk-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+      </div>
+      <p class="left" id="walk-left" aria-live="polite">3 sessions left this week</p>
+      <button id="walk-button" type="button">Log 15-minute walk</button>
+    </section>
+    <section class="habit" aria-labelledby="read-title">
+      <div class="habit-heading">
+        <h2 id="read-title">Read</h2>
+        <div class="dots" id="read-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+      </div>
+      <p class="left" id="read-left" aria-live="polite">3 sessions left this week</p>
+      <button id="read-button" type="button">Log 10 minutes of reading</button>
+    </section>
+  </main>
+  <script>
+    'use strict';
+
+    const goal = 3;
+    const habits = [
+      { id: 'walk', action: 'Log 15-minute walk', logged: 'Walk logged today ✓' },
+      { id: 'read', action: 'Log 10 minutes of reading', logged: 'Reading logged today ✓' }
+    ];
+    const byId = id => document.getElementById(id);
+    const dateFormat = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' });
+
+    function dayKey(date) {
+      const pad = part => String(part).padStart(2, '0');
+      return [date.getFullYear(), pad(date.getMonth() + 1), pad(date.getDate())].join('-');
+    }
+
+    function weekDates(today) {
+      const offset = (today.getDay() + 6) % 7;
+      return Array.from({ length: 7 }, (_, day) => new Date(
+        today.getFullYear(), today.getMonth(), today.getDate() - offset + day, 12
+      ));
+    }
+
+    function storageKey(habit, day) {
+      return `morning-routine:v1:${habit}:${day}`;
+    }
+
+    function setText(element, value) {
+      if (element.textContent !== value) element.textContent = value;
+    }
+
+    function showStorageError() {
+      const notice = byId('notice');
+      notice.textContent = 'This browser couldn’t access saved progress. Open the dashboard in a regular Safari tab and try again.';
+      notice.hidden = false;
+    }
+
+    function render() {
+      const today = new Date();
+      const todayKey = dayKey(today);
+      const dates = weekDates(today);
+      const dateLabel = `${dateFormat.format(dates[0])}–${dateFormat.format(dates[6])}`;
+      setText(byId('week'), `${dateLabel} · Goal: 3 of each`);
+
+      try {
+        for (const habit of habits) {
+          const daysLogged = dates.map(dayKey).filter(day => localStorage.getItem(storageKey(habit.id, day)) === '1');
+          const left = Math.max(0, goal - daysLogged.length);
+          const loggedToday = daysLogged.includes(todayKey);
+          const progress = left === 0 ? '0 sessions left · Goal met' : `${left} ${left === 1 ? 'session' : 'sessions'} left this week`;
+          setText(byId(`${habit.id}-left`), progress);
+          const button = byId(`${habit.id}-button`);
+          button.disabled = loggedToday;
+          setText(button, loggedToday ? habit.logged : habit.action);
+          Array.from(byId(`${habit.id}-dots`).children).forEach((dot, index) => {
+            dot.classList.toggle('complete', index < daysLogged.length);
+          });
+        }
+      } catch {
+        showStorageError();
+      }
+    }
+
+    for (const habit of habits) {
+      byId(`${habit.id}-button`).addEventListener('click', () => {
+        try {
+          const key = storageKey(habit.id, dayKey(new Date()));
+          if (localStorage.getItem(key) !== '1') localStorage.setItem(key, '1');
+          byId('notice').hidden = true;
+          render();
+        } catch {
+          showStorageError();
+        }
+      });
+    }
+
+    window.addEventListener('pageshow', render);
+    window.addEventListener('storage', render);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+    window.setInterval(render, 15000);
+    render();
+  </script>
+</body>
+</html>
